@@ -3,9 +3,11 @@ import React, { useState, useEffect } from 'react';
 import LessonForm from './components/LessonForm';
 import Layout from './components/Layout';
 import GroupDashboard from './components/GroupDashboard';
+import SaveLoadModal from './components/SaveLoadModal';
 import { Lesson, LessonPart, GroupProfile, StudentProfile, DojoMasterData, LessonHistoryEntry } from './types';
 import { Save, RefreshCw, CheckCircle } from 'lucide-react';
 import { generateId } from './utils';
+import { updateSave, isBackendAvailable } from './saveApi';
 
 // Modules
 import MissionBriefing from './components/modules/MissionBriefing'; 
@@ -20,6 +22,13 @@ import WordlistReading from './components/modules/WordlistReading';
 import PassageReading from './components/modules/PassageReading';
 
 const STORAGE_KEY = 'wrs_dojo_master_v2';
+const SAVE_STATE_KEY = 'wrs_current_save_state';
+
+interface SaveState {
+  currentSaveId: string | null;
+  autoSaveEnabled: boolean;
+  lastAutoSaveTime: number | null;
+}
 
 const App: React.FC = () => {
   const [groups, setGroups] = useState<GroupProfile[]>([]);
@@ -30,6 +39,58 @@ const App: React.FC = () => {
   const [mode, setMode] = useState<'dashboard' | 'edit' | 'run'>('dashboard');
   const [sessionStudentIds, setSessionStudentIds] = useState<string[]>([]);
   const [showSaveToast, setShowSaveToast] = useState(false);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [currentSaveId, setCurrentSaveId] = useState<string | null>(null);
+  const [autoSaveEnabled, setAutoSaveEnabled] = useState(false);
+  const [lastAutoSaveTime, setLastAutoSaveTime] = useState<number | null>(null);
+  const [hasBackend, setHasBackend] = useState<boolean | null>(null);
+
+  // Check if backend is available
+  useEffect(() => {
+    isBackendAvailable().then(setHasBackend);
+  }, []);
+
+  // Load save state from localStorage
+  useEffect(() => {
+    const savedState = localStorage.getItem(SAVE_STATE_KEY);
+    if (savedState) {
+      try {
+        const state: SaveState = JSON.parse(savedState);
+        setCurrentSaveId(state.currentSaveId);
+        setAutoSaveEnabled(state.autoSaveEnabled);
+        setLastAutoSaveTime(state.lastAutoSaveTime);
+      } catch (e) {
+        console.error('Failed to parse save state', e);
+      }
+    }
+  }, []);
+
+  // Save state to localStorage whenever it changes
+  useEffect(() => {
+    const state: SaveState = {
+      currentSaveId,
+      autoSaveEnabled,
+      lastAutoSaveTime
+    };
+    localStorage.setItem(SAVE_STATE_KEY, JSON.stringify(state));
+  }, [currentSaveId, autoSaveEnabled, lastAutoSaveTime]);
+
+  // Auto-save functionality
+  useEffect(() => {
+    if (!autoSaveEnabled || !currentSaveId) return;
+
+    const interval = setInterval(async () => {
+      try {
+        await updateSave(currentSaveId);
+        setLastAutoSaveTime(Date.now());
+        console.log('Auto-save completed');
+      } catch (err) {
+        console.error('Auto-save failed:', err);
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+
+    return () => clearInterval(interval);
+  }, [autoSaveEnabled, currentSaveId]);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
@@ -250,6 +311,17 @@ const App: React.FC = () => {
         </div>
       )}
 
+      {/* Save/Load Button */}
+      {mode === 'dashboard' && (
+        <button
+          onClick={() => setShowSaveModal(true)}
+          className="fixed bottom-6 right-6 z-50 bg-blue-600 text-white px-6 py-3 rounded-full shadow-2xl hover:bg-blue-700 transition-colors font-bold uppercase tracking-wider flex items-center gap-2"
+        >
+          <Save className="w-5 h-5" />
+          Save/Load
+        </button>
+      )}
+
       {mode === 'dashboard' ? (
         <GroupDashboard 
           groups={groups} 
@@ -286,6 +358,18 @@ const App: React.FC = () => {
           </Layout>
         )
       )}
+
+      {/* Save/Load Modal */}
+      <SaveLoadModal
+        isOpen={showSaveModal}
+        onClose={() => setShowSaveModal(false)}
+        currentSaveId={currentSaveId}
+        autoSaveEnabled={autoSaveEnabled}
+        onSetCurrentSave={setCurrentSaveId}
+        onToggleAutoSave={setAutoSaveEnabled}
+        lastAutoSaveTime={lastAutoSaveTime}
+        hasBackend={hasBackend || false}
+      />
     </div>
   );
 };
