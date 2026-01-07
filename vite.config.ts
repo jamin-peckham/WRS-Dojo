@@ -11,5 +11,9 @@ export default defineConfig({
         main: './index.html',
       },
     },
+  },  
+  server: {
+    host: true,     // same as 0.0.0.0
+    port: 5173,
   },
 })

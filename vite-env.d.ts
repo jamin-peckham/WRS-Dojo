@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 
 /**
  * Built-in environment variables (BASE_URL, MODE, DEV, PROD, SSR) 
@@ -8,4 +9,11 @@
 interface ImportMetaEnv {
   // Custom environment variables starting with VITE_ can be added here
   // for better type safety across the application.
+  readonly PROD: boolean;
+  readonly DEV: boolean;
+  readonly MODE: string;
+}
+
+interface ImportMeta {
+  readonly env: ImportMetaEnv;
 }
